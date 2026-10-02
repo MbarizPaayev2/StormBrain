@@ -164,3 +164,61 @@ def test_private_ips_never_geolocated():
         assert storm_app._is_private_ip(ip) is True
         geo = storm_app.get_ip_geolocation(ip)
         assert geo["country"] == "Unknown"
+
+
+# --- ngrok token lifecycle -------------------------------------------------
+# Requirement: no token is shipped in the source; the user is asked once on
+# first run, the token they type is stored, and it is never auto-deleted.
+
+def test_no_ngrok_token_is_hardcoded_in_source():
+    """A real ngrok authtoken must never appear in the repository."""
+    import re
+
+    pattern = re.compile(r"\b2[a-zA-Z0-9]{25,}\b")
+    # Real ngrok tokens mix upper/lower/digits and carry no readable words.
+    # The fixtures in this file are the only intentional 25+ char "2..."
+    # strings, so they are excluded explicitly.
+    self_file = Path(__file__).resolve()
+    offenders = []
+    for path in REPO_ROOT.rglob("*"):
+        if not path.is_file() or ".git" in path.parts:
+            continue
+        if "__pycache__" in path.parts or path.resolve() == self_file:
+            continue
+        if path.suffix.lower() in {".png", ".jpg", ".ico", ".zip", ".gz", ".woff", ".pyc"}:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if pattern.search(text):
+            offenders.append(str(path.relative_to(REPO_ROOT)))
+    assert not offenders, f"possible ngrok token committed: {offenders}"
+
+
+def test_token_stored_outside_web_root_and_not_deleted(tmp_path, monkeypatch):
+    """Token is written to .secrets/, survives, and is never expired."""
+    from modules import tunnel
+
+    monkeypatch.setattr(tunnel, "TOKEN_PATH", tmp_path / ".secrets" / "ngrok.json")
+    monkeypatch.delenv("NGROK_AUTHTOKEN", raising=False)
+    monkeypatch.setattr(tunnel, "_find_system_ngrok_token", lambda: "")
+    monkeypatch.setattr(tunnel, "_migrate_legacy_token", lambda: "")
+
+    entered = {"2TESTNGROKtoken0123456789abcd": iter(["2TESTNGROKtoken0123456789abcd"])}
+    monkeypatch.setattr("builtins.input", lambda *a, **k: next(entered["2TESTNGROKtoken0123456789abcd"]))
+    monkeypatch.setattr(tunnel.ngrok, "set_auth_token", lambda t: None)
+
+    token = tunnel.setup_auth_token()
+    assert token, "first run must ask for and use a token"
+    assert tunnel.TOKEN_PATH.exists(), "token must be persisted after first run"
+
+    # Second run: the user must NOT be asked again, and the file must survive.
+    monkeypatch.setattr("builtins.input", lambda *a, **k: pytest.fail("asked twice"))
+    assert tunnel.setup_auth_token() == token
+    assert tunnel.TOKEN_PATH.exists(), "stored token was deleted on a later run"
+
+    # Nothing in the module expires or prunes the stored token.
+    import inspect
+    src = inspect.getsource(tunnel)
+    assert "timedelta" not in src and "7 * 24" not in src and "604800" not in src

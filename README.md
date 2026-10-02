@@ -78,8 +78,11 @@ clone that repository instead if you want the unmodified original.
 
 ### First run checklist
 
-1. **ngrok token** - export `NGROK_AUTHTOKEN=...` or enter it once when prompted.
-   It is stored in `.secrets/ngrok.json` (gitignored, never served over HTTP).
+1. **ngrok token** - the code ships **without** any token. On the first run it asks
+   for it once and stores what you type in `.secrets/ngrok.json` (gitignored,
+   never served over HTTP). It is kept permanently: there is **no** expiry,
+   weekly rotation or automatic deletion, so you are never asked again. To use a
+   different token later, replace the contents of that file.
 2. **Change the admin password** - default is `admin` / `admin`; the new password is
    stored as a salted hash in `.secrets/credentials.json` and survives restarts.
    (Settings tab, minimum 8 characters.)

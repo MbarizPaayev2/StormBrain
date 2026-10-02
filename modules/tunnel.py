@@ -98,16 +98,26 @@ def get_saved_token():
 
 
 def setup_auth_token():
-    """Retrieve saved ngrok auth token or prompt only once if missing."""
+    """Retrieve saved ngrok auth token or prompt only once if missing.
+
+    The token is asked for exactly once and then stored permanently in
+    .secrets/ngrok.json. Nothing in this module expires, rotates or deletes
+    it - a stored token survives every later run until the user changes it
+    on the ngrok dashboard and edits the file.
+    """
     token = get_saved_token()
     if token:
-        print(Fore.GREEN + " [+] Using stored Ngrok Auth-Token." + Style.RESET_ALL)
+        source = "stored" if TOKEN_PATH.exists() else "environment/system"
+        print(Fore.GREEN + f" [+] Using stored Ngrok Auth-Token ({source})." + Style.RESET_ALL)
     else:
         print(Fore.LIGHTCYAN_EX + " [!] No Ngrok Auth-Token found." + Style.RESET_ALL)
+        print(Fore.YELLOW + "     Get it at https://dashboard.ngrok.com/get-started/your-authtoken"
+              + Style.RESET_ALL)
         token = input(Fore.YELLOW + " [>] Please enter your Ngrok Auth-Token: " + Style.RESET_ALL).strip()
         if token:
             save_token(token)
-            print(Fore.GREEN + " [+] Ngrok Auth-Token saved permanently!\n" + Style.RESET_ALL)
+            print(Fore.GREEN + " [+] Ngrok Auth-Token saved to .secrets/ngrok.json "
+                  "(permanent - you will not be asked again)." + Style.RESET_ALL)
 
     if token:
         try:
