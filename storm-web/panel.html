@@ -1,0 +1,621 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StormBrain - Operations Console</title>
+    <link rel="icon" type="image/png" href="/assets/img/logo-64.png?v=axe1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/assets/css/dashboard.css" rel="stylesheet">
+    <link href="/assets/css/panel.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- The map is rendered locally by /assets/js/stormmap.js with country
+         paths from /assets/js/worldmap-data.js (no tile server, no API key). -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <!-- panel styles: /assets/css/panel.css (inline styles moved out; style="" attributes preserved) -->
+    <meta name="csrf-token" content="{{ csrf_token }}">
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <a class="sidebar-brand" href="#">
+            <img class="brand-logo" src="/assets/img/logo.png?v=axe1" alt="StormBrain logo" width="34" height="34">
+            <span class="brand-text">StormBrain</span>
+        </a>
+
+        <nav class="sidebar-nav">
+            <div class="nav-label">Console</div>
+            <div class="nav-item-sb active" data-section="dashboard">
+                <span class="soc-nav-ico">&#9670;</span>
+                <span class="nav-text" data-i18n="dashboard">Dashboard</span>
+            </div>
+            <div class="nav-item-sb" data-section="logs">
+                <span class="soc-nav-ico">&#8801;</span>
+                <span class="nav-text" data-i18n="logs">Logs</span>
+            </div>
+            <div class="nav-item-sb" data-section="map">
+                <span class="soc-nav-ico">&#9678;</span>
+                <span class="nav-text" data-i18n="map">Map</span>
+            </div>
+            <div class="nav-item-sb" data-section="media">
+                <span class="soc-nav-ico">&#9638;</span>
+                <span class="nav-text" data-i18n="media_gallery">Media Gallery</span>
+            </div>
+
+            <div class="nav-label">Analytics</div>
+            <div class="nav-item-sb" data-section="statistics">
+                <span class="soc-nav-ico">&#8803;</span>
+                <span class="nav-text">Statistics</span>
+            </div>
+
+            <div class="nav-label">System</div>
+            <div class="nav-item-sb" data-section="settings">
+                <span class="soc-nav-ico">&#9881;</span>
+                <span class="nav-text" data-i18n="settings">Settings</span>
+            </div>
+            <div class="nav-item-sb" data-section="templates">
+                <span class="soc-nav-ico">&#10633;</span>
+                <span class="nav-text" data-i18n="template_manager">Template Manager</span>
+            </div>
+            
+            <div class="nav-label">Appearance</div>
+            <div class="nav-item-sb" id="theme-toggle">
+                <span class="soc-nav-ico">&#9790;</span>
+                <span class="nav-text" data-i18n="toggle_theme">Toggle Theme</span>
+            </div>
+        </nav>
+
+        <div class="sidebar-footer">
+            <a class="nav-item-sb" href="/logout" style="color: var(--danger);">
+                <span class="soc-nav-ico">&#9212;</span>
+                <span class="nav-text">Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Topbar -->
+    <header class="topbar">
+        <div class="topbar-left">
+            <button class="btn-toggle" id="btnToggleSidebar" aria-label="Toggle sidebar">&#9776;</button>
+            <span class="topbar-title" id="page-title">Dashboard</span><span class="soc-status-pill is-live" id="live-pill">LIVE</span>
+        </div>
+        <div class="topbar-right">
+            <button class="search-trigger" id="search-trigger" aria-label="Search (Ctrl+K)" title="Search (Ctrl+K)">
+                <span class="search-trigger-ico">&#8981;</span>
+                <span class="search-trigger-text">Search</span>
+                <span class="soc-kbd">Ctrl K</span>
+            </button>
+            <span class="clock" id="clock"></span>
+            <button class="notif-bell" id="notif-bell" aria-label="Notifications">&#128276;
+                <span class="notif-badge" id="notif-count" style="display:none;">0</span>
+            </button>
+            <button class="btn-theme" aria-label="Toggle theme">&#9790;</button>
+        </div>
+    </header>
+
+    <!-- Notification Panel -->
+    <div class="notification-panel" id="notification-panel">
+        <div class="notification-header">
+            <span>Notifications</span>
+            <button class="btn-clear-notif" onclick="clearAllNotifications()">Clear All</button>
+        </div>
+        <div class="notification-list" id="notification-list">
+            <div class="notification-empty">No notifications</div>
+        </div>
+        <div class="notification-footer">
+            <button class="btn-clear-notif" onclick="markAllAsRead()">Mark all as read</button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+        <!-- ===== DASHBOARD SECTION ===== -->
+        <section class="content-section active" id="section-dashboard">
+            <div class="soc-page-head">
+                <div>
+                    <div class="soc-eyebrow">Operations // Live</div>
+                    <h1 class="soc-h1">Threat Operations Dashboard</h1>
+                    <p class="soc-sub">Live sessions, captured intel and template telemetry at a glance.</p>
+                </div>
+                <div class="soc-head-actions">
+                    <span class="soc-chip"><span class="soc-live-dot"></span>Streaming</span>
+                    <button type="button" class="soc-btn ghost" onclick="refreshDashboard()">Refresh all</button>
+                </div>
+            </div>
+
+            <div class="dash-stack">
+            <!-- 1) Metrics: KPI strip -->
+            <section class="dash-block" aria-label="Key metrics">
+            <div class="kpi-strip">
+                <article class="kpi-tile kpi-cyan">
+                    <div class="kpi-top">
+                        <span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 4 12L16 12h5"/></svg></span>
+                        <span class="kpi-badge">live</span>
+                    </div>
+                    <div class="kpi-value" id="stat-connections">0</div>
+                    <div class="kpi-label">Live sessions</div>
+                    <div class="kpi-note">Operator sessions observed by the listener</div>
+                </article>
+
+                <article class="kpi-tile kpi-green">
+                    <div class="kpi-top">
+                        <span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.2l1.1-1.7A1 1 0 0 1 8.6 4h6.8a1 1 0 0 1 .8.4L17.3 6h1.2A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-8Z"/><circle cx="12" cy="12.5" r="3.4"/></svg></span>
+                        <span class="kpi-badge">camera</span>
+                    </div>
+                    <div class="kpi-value" id="stat-images">0</div>
+                    <div class="kpi-label">Images captured</div>
+                    <div class="kpi-note">Stored in the media evidence vault</div>
+                </article>
+
+                <article class="kpi-tile kpi-amber">
+                    <div class="kpi-top">
+                        <span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0v-5a3 3 0 0 1 3-3Z"/><path d="M6.5 11.5a5.5 5.5 0 0 0 11 0"/><path d="M12 17v3.5M9 20.5h6"/></svg></span>
+                        <span class="kpi-badge">audio</span>
+                    </div>
+                    <div class="kpi-value" id="stat-audio">0</div>
+                    <div class="kpi-label">Audio recorded</div>
+                    <div class="kpi-note">Microphone captures ready for review</div>
+                </article>
+
+                <article class="kpi-tile kpi-pink">
+                    <div class="kpi-top">
+                        <span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6.5-6.1 6.5-10.5A6.5 6.5 0 0 0 5.5 10.5C5.5 14.9 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2.4"/></svg></span>
+                        <span class="kpi-badge">geo</span>
+                    </div>
+                    <div class="kpi-value" id="stat-locations">0</div>
+                    <div class="kpi-label">Locations tracked</div>
+                    <div class="kpi-note">GPS fixes and IP geolocation hits</div>
+                </article>
+            </div>
+            </section>
+
+            <!-- 2) Workspace: intel + activity -->
+            <section class="dash-block" aria-label="Intel workspace">
+            <div class="dash-split">
+                <div class="dash-card">
+                    <div class="dash-card-header">
+                        <span>Deployment templates</span>
+                        <div class="dash-card-tools">
+                            <span class="tpl-count" id="links-count">0</span>
+                            <button class="btn-refresh" onclick="loadTemplateLinks()">Refresh</button>
+                        </div>
+                    </div>
+                    <div class="dash-card-body scroll-y" id="links">
+                        <p class="dash-empty">Loading templates...</p>
+                    </div>
+                </div>
+                <div class="dash-card">
+                    <div class="dash-card-header">
+                        <span>Signal timeline</span>
+                        <button class="btn-refresh" onclick="loadActivityFeed()">Refresh</button>
+                    </div>
+                    <div class="dash-card-body scroll-y" id="activity-feed">
+                        <p class="dash-empty">No recent activity</p>
+                    </div>
+                </div>
+            </div>
+            </section>
+
+            <!-- 3) Shortcuts: jump to module -->
+            <section class="dash-block" aria-label="Module shortcuts">
+            <div class="dash-card quick-card">
+                <div class="dash-card-header">
+                    <span>Jump to module</span>
+                    <span class="soc-status-pill">Operator shortcuts</span>
+                </div>
+                <div class="dash-card-body">
+                    <div class="quick-grid">
+                        <button type="button" class="quick-tile" onclick="showSection('logs')">
+                            <span class="quick-ico" aria-hidden="true">&#8801;</span>
+                            <span class="quick-name">Live logs</span>
+                            <span class="quick-desc">Stream, filter and export events</span>
+                        </button>
+                        <button type="button" class="quick-tile" onclick="showSection('map')">
+                            <span class="quick-ico" aria-hidden="true">&#9678;</span>
+                            <span class="quick-name">Target map</span>
+                            <span class="quick-desc">Offline geo intel and markers</span>
+                        </button>
+                        <button type="button" class="quick-tile" onclick="showSection('media')">
+                            <span class="quick-ico" aria-hidden="true">&#9638;</span>
+                            <span class="quick-name">Media vault</span>
+                            <span class="quick-desc">Camera and microphone captures</span>
+                        </button>
+                        <button type="button" class="quick-tile" onclick="showSection('statistics')">
+                            <span class="quick-ico" aria-hidden="true">&#8803;</span>
+                            <span class="quick-name">Analytics</span>
+                            <span class="quick-desc">Trends, breakdowns and exports</span>
+                        </button>
+                        <button type="button" class="quick-tile" onclick="showSection('templates')">
+                            <span class="quick-ico" aria-hidden="true">&#10633;</span>
+                            <span class="quick-name">Templates</span>
+                            <span class="quick-desc">Create, review and deploy lures</span>
+                        </button>
+                        <button type="button" class="quick-tile" onclick="showSection('settings')">
+                            <span class="quick-ico" aria-hidden="true">&#9881;</span>
+                            <span class="quick-name">Settings</span>
+                            <span class="quick-desc">Credentials and server telemetry</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            </section>
+            </div><!-- /.dash-stack -->
+        </section>
+
+        <!-- ===== LOGS SECTION ===== -->
+        <section class="content-section" id="section-logs">
+            <div class="soc-page-head">
+                <div>
+                    <div class="soc-eyebrow">Stream // Terminal</div>
+                    <h1 class="soc-h1">Live Event Logs</h1>
+                    <p class="soc-sub">Filter, search and export incoming events.</p>
+                </div>
+                <div class="soc-head-actions">
+                    <span class="soc-chip"><span class="soc-live-dot"></span></span>
+                </div>
+            </div>
+            <div class="dash-card">
+                <div class="dash-card-header">
+                    <span>Live Logs</span>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="listener-status" id="listener-status" style="font-size:12px; color: var(--success);">Listening</span>
+                    </div>
+                </div>
+                <div class="dash-card-body" style="padding:0;">
+                    <div class="log-search-bar">
+                        <select id="log-filter" class="log-filter-select">
+                            <option value="all">All Logs</option>
+                            <option value="image">Images</option>
+                            <option value="audio">Audio</option>
+                            <option value="location">Location</option>
+                            <option value="info">Info</option>
+                        </select>
+                        <input type="text" id="log-search" placeholder="Search logs..." style="flex:1;background:var(--bg-surface);border:1px solid var(--border);color:var(--text-primary);border-radius:8px;padding:8px 12px;font-size:13px;">
+                        <button class="log-follow is-on" id="btn-follow" type="button" title="Auto-scroll to the newest event. Scrolling up pauses it; reaching the bottom resumes it.">Follow: on</button>
+                        <button class="btn-search-clear" onclick="clearLogSearch()">✕</button>
+                    </div>
+                    <div class="log-terminal" id="result" placeholder="Waiting for results..."></div>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <button class="act-btn is-danger" id="btn-listen">Stop Listener</button>
+                <button class="act-btn is-success" onclick="saveTextAsFile(document.getElementById('result').innerText,'log.txt')">Download</button>
+                <button class="act-btn is-warn" id="btn-clear">Clear</button>
+                <button class="act-btn is-accent" id="btn-export-pdf">Export Report</button>
+                <button class="act-btn is-indigo" onclick="exportLogsJSON()">Export JSON</button>
+            </div>
+        </section>
+
+        <!-- ===== MAP SECTION (offline vector world map: stormmap.js + worldmap-data.js) ===== -->
+        <section class="content-section" id="section-map">
+            <div class="soc-page-head">
+                <div>
+                    <div class="soc-eyebrow">Geo // Tracking</div>
+                    <h1 class="soc-h1">World Map</h1>
+                    <p class="soc-sub">Offline vector map &middot; hover a country to inspect it, drag to pan, scroll to zoom &middot; open any target in Google Maps.</p>
+                </div>
+                <div class="soc-head-actions">
+                    <span class="soc-chip">GPS fixes <strong id="map-gps-count">0</strong></span>
+                    <span class="soc-chip">IP hits <strong id="map-ip-count">0</strong></span>
+                    <span class="soc-chip">Cities <strong id="map-city-count">0</strong></span>
+                    <span class="soc-chip">Countries lit <strong id="map-lit-count">0</strong></span>
+                </div>
+            </div>
+
+            <!-- Large map (dossier / location-list / live-feed panels removed) -->
+            <div class="map-shell map-shell-full">
+                <div class="dash-card map-card">
+                    <div class="dash-card-header">
+                        <span>Target Locations</span>
+                        <div class="map-tools">
+                            <button type="button" class="map-btn" id="btn-load-visitors" onclick="loadVisitorLocations(this)">Load IP locations</button>
+                            <button type="button" class="map-btn" id="btn-resolve-ips" onclick="loadLogGeoIntel(this)">Resolve IPs from logs</button>
+                            <button type="button" class="map-btn" onclick="fitMapBounds()">Fit all</button>
+                            <button type="button" class="map-btn" onclick="openMapInGoogleMaps()">Open in Google Maps</button>
+                            <button type="button" class="map-btn" onclick="copyAllCoords()">Copy all</button>
+                            <button type="button" class="map-btn" onclick="exportCoordsCSV()">CSV</button>
+                            <button type="button" class="map-btn" onclick="exportCoordsKML()">KML</button>
+                            <button type="button" class="map-btn danger" onclick="clearMapMarkers()">Clear markers</button>
+                        </div>
+                    </div>
+                    <div class="map-frame">
+                        <!-- The StormMap engine builds its black canvas, SVG country
+                             layer, markers, toolbar and readout inside #map. -->
+                        <div id="map"></div>
+                        <div class="map-legend">
+                            <span class="map-legend-item"><i class="dot dot-gps"></i>GPS intel (device fix, ±m)</span>
+                            <span class="map-legend-item"><i class="dot dot-ip"></i>IP geolocation (city-level only)</span>
+                            <span class="map-legend-item"><i class="dot dot-lit"></i>Country lit by IP</span>
+                            <span class="map-legend-item"><i class="dot dot-city"></i>City resolved from logs</span>
+                            <span class="map-legend-item"><i class="dot dot-hover"></i>Hover a country to inspect</span>
+                            <span class="map-legend-note">GPS markers show a real accuracy radius; IP markers are approximate city centers, not device positions.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== MEDIA SECTION ===== -->
+        <section class="content-section" id="section-media">
+            <div class="soc-page-head">
+                <div>
+                    <div class="soc-eyebrow">Intel // Captures</div>
+                    <h1 class="soc-h1">Media Evidence Vault</h1>
+                    <p class="soc-sub">Images and audio captured in the current run. Previous runs are archived and can be selected from the session list.</p>
+                </div>
+            </div>
+            <div class="dash-card">
+                <div class="dash-card-header">
+                    <span>Media Gallery</span>
+                    <div class="d-flex gap-2 align-items-center">
+                        <div class="media-filter-group">
+                            <button class="chip-btn media-filter active" data-filter="all">All</button>
+                            <button class="chip-btn media-filter" data-filter="image">Images</button>
+                            <button class="chip-btn media-filter" data-filter="audio">Audio</button>
+                        </div>
+                        <div class="media-view-toggle">
+                            <button class="chip-btn view-toggle active" data-view="grid">Grid</button>
+                            <button class="chip-btn view-toggle" data-view="list">List</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="dash-card-body">
+                    <div class="media-toolbar">
+                        <div class="media-session">
+                            <select id="session-select" title="Data session" aria-label="Data session" style="background:var(--bg-surface);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;">
+                                <option value="">Current session</option>
+                            </select>
+                        </div>
+                        <div class="media-search">
+                            <input type="text" id="media-search" placeholder="Search media..." style="background:var(--bg-surface);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:6px 12px;font-size:12px;width:200px;">
+                        </div>
+                        <div class="media-actions">
+                            <button class="act-btn is-success sm" onclick="downloadSelectedMedia()">Download Selected</button>
+                            <button class="act-btn is-danger sm" onclick="deleteSelectedMedia()">Delete Selected</button>
+                        </div>
+                    </div>
+                    <div class="media-count" id="media-count" style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">0 items</div>
+                    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3" id="media-gallery">
+                        <p class="text-center w-100" style="color: var(--text-secondary); padding:40px 0;" id="media-placeholder">No media captured yet.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== STATISTICS SECTION ===== -->
+        <section class="content-section" id="section-statistics">
+            <div class="soc-page-head">
+                <div>
+                    <div class="soc-eyebrow">Analytics // Trends</div>
+                    <h1 class="soc-h1">Operational Analytics</h1>
+                    <p class="soc-sub">Activity trends, breakdowns and exports.</p>
+                </div>
+            </div>
+            <div class="row g-3 mb-4">
+                <div class="col-lg-8">
+                    <div class="dash-card">
+                        <div class="dash-card-header">
+                            <span>Activity Over Time</span>
+                            <select id="chart-period" style="background:var(--bg-surface);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;">
+                                <option value="7">Last 7 days</option>
+                                <option value="30">Last 30 days</option>
+                                <option value="90">Last 90 days</option>
+                            </select>
+                        </div>
+                        <div class="dash-card-body">
+                            <canvas id="chart-daily" height="100"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="dash-card">
+                        <div class="dash-card-header"><span>Data Breakdown</span></div>
+                        <div class="dash-card-body">
+                            <canvas id="chart-types" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-lg-6">
+                    <div class="dash-card">
+                        <div class="dash-card-header"><span>Target Distribution</span></div>
+                        <div class="dash-card-body">
+                            <canvas id="chart-targets" height="150"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="dash-card">
+                        <div class="dash-card-header"><span>Response Times</span></div>
+                        <div class="dash-card-body">
+                            <canvas id="chart-response" height="150"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row g-3 mt-3">
+                <div class="col-12">
+                    <div class="dash-card">
+                        <div class="dash-card-header">
+                            <span>Export Statistics</span>
+                        </div>
+                        <div class="dash-card-body">
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="act-btn is-success" onclick="exportStatsCSV()">Export CSV</button>
+                                <button class="act-btn is-accent" onclick="exportStatsJSON()">Export JSON</button>
+                                <button class="act-btn is-indigo" onclick="exportChartsImage()">Export Charts</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SETTINGS SECTION ===== -->
+        <section class="content-section" id="section-settings">
+            <div class="soc-page-head">
+                <div>
+                    <div class="soc-eyebrow">System // Control</div>
+                    <h1 class="soc-h1">System Settings</h1>
+                    <p class="soc-sub">Credentials and server telemetry.</p>
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-lg-6">
+                    <div class="dash-card">
+                        <div class="dash-card-header"><span>Change Password</span></div>
+                        <div class="dash-card-body">
+                            <div class="mb-3">
+                                <label style="font-size:13px; color:var(--text-secondary); margin-bottom:4px;">Current Password</label>
+                                <input type="password" class="form-control" id="current-pass" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:8px;">
+                            </div>
+                            <div class="mb-3">
+                                <label style="font-size:13px; color:var(--text-secondary); margin-bottom:4px;">New Password</label>
+                                <input type="password" class="form-control" id="new-pass" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:8px;">
+                            </div>
+                            <button class="act-btn is-accent" id="btn-change-pass">Update Password</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="dash-card">
+                        <div class="dash-card-header"><span>Server Info</span></div>
+                        <div class="dash-card-body" id="server-info">
+                            <p style="color:var(--text-secondary);">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== TEMPLATE MANAGER SECTION ===== -->
+        <section class="content-section" id="section-templates">
+            <div class="soc-page-head">
+                <div>
+                    <div class="soc-eyebrow">Arsenal // Templates</div>
+                    <h1 class="soc-h1">Template Manager</h1>
+                    <p class="soc-sub">Create, review and deploy lures.</p>
+                </div>
+                <div class="soc-head-actions">
+                    <button class="soc-btn primary" onclick="showCreateTemplateModal()">New Template</button>
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-lg-8">
+                    <div class="dash-card">
+                        <div class="dash-card-header">
+                            <span>Template Manager</span>
+                            <button class="act-btn is-accent sm" onclick="showCreateTemplateModal()">Create New Template</button>
+                        </div>
+                        <div class="dash-card-body">
+                            <div id="templates-list">
+                                <p style="color:var(--text-secondary);text-align:center;padding:20px;">Loading templates...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="dash-card">
+                        <div class="dash-card-header"><span>Template Stats</span></div>
+                        <div class="dash-card-body">
+                            <div class="template-stat-row">
+                                <span class="template-stat-label">Total Templates</span>
+                                <span class="template-stat-value" id="total-templates">0</span>
+                            </div>
+                            <div class="template-stat-row">
+                                <span class="template-stat-label">Camera Templates</span>
+                                <span class="template-stat-value" id="camera-templates">0</span>
+                            </div>
+                            <div class="template-stat-row">
+                                <span class="template-stat-label">Audio Templates</span>
+                                <span class="template-stat-value" id="audio-templates">0</span>
+                            </div>
+                            <div class="template-stat-row">
+                                <span class="template-stat-label">Location Templates</span>
+                                <span class="template-stat-value" id="location-templates">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Lightbox -->
+    <div id="lightbox" class="soc-lightbox" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:9999; cursor:pointer; align-items:center; justify-content:center;">
+        <img id="lightbox-img" class="soc-lightbox-img" style="max-width:90%; max-height:90%; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+        <span class="soc-lightbox-x" style="position:absolute; top:20px; right:30px; color:#fff; font-size:32px; cursor:pointer;" onclick="closeLightbox()">✕</span>
+    </div>
+
+    <!-- Create Template Modal -->
+    <div class="modal-overlay" id="create-template-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Create New Template</div>
+                <button class="modal-close" onclick="closeCreateTemplateModal()">X</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Template Name</label>
+                    <input type="text" class="form-input" id="template-name" placeholder="e.g., custom_login">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Template Type</label>
+                    <select class="form-input" id="template-type">
+                        <option value="custom">Custom</option>
+                        <option value="camera">Camera</option>
+                        <option value="audio">Audio</option>
+                        <option value="location">Location</option>
+                        <option value="info">Info</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <input type="text" class="form-input" id="template-description" placeholder="Brief description of the template">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">HTML Content</label>
+                    <textarea class="form-textarea" id="template-html" placeholder="Enter HTML code here..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeCreateTemplateModal()">Cancel</button>
+                <button class="btn-primary" onclick="createTemplate()">Create Template</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/assets/js/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/assets/js/sweetalert2.min.js"></script>
+    <script src="/assets/js/worldmap-data.js?v=axe1"></script>
+    <script src="/assets/js/stormmap.js"></script>
+    <script src="/assets/js/sb.js"></script>
+    <!-- Command palette (Ctrl+K) -->
+    <div class="cmdk-overlay" id="cmdk-overlay" aria-hidden="true">
+        <div class="cmdk" role="dialog" aria-modal="true" aria-label="Go to page">
+            <div class="cmdk-input-row">
+                <span class="cmdk-ico">&#8981;</span>
+                <input type="text" class="cmdk-input" id="cmdk-input" placeholder="Type a page name... (Dashboard, Logs, Map, Media, Statistics, Settings, Templates)" autocomplete="off" spellcheck="false">
+                <span class="soc-kbd">ESC</span>
+            </div>
+            <div class="cmdk-list" id="cmdk-list" role="listbox"></div>
+            <div class="cmdk-foot"><span>UP/DOWN to move</span><span>ENTER to open</span><span>Ctrl K to toggle</span></div>
+        </div>
+    </div>
+    <script src="/assets/js/dashboard.js"></script>
+</body>
+</html>
+
+
+
+
+

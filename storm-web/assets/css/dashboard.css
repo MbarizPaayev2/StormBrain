@@ -1,0 +1,177 @@
+/* ===== Dashboard CSS - StormBrain ===== */
+
+/* Terminal/Log */
+.log-terminal {
+    width: 100%;
+    background: #0d1117;
+    color: #00ff41;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 20px;
+    border: none;
+    resize: none;
+    outline: none;
+    border-radius: 0 0 16px 16px;
+}
+
+/* Map */
+#map {
+    width: 100%;
+    height: 500px;
+    border-radius: 0 0 16px 16px;
+}
+
+/* Media Cards */
+.media-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    height: 100%;
+}
+
+.media-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+    border-color: var(--accent);
+}
+
+.media-card img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    cursor: pointer;
+    transition: transform 0.3s;
+}
+
+.media-card img:hover { transform: scale(1.03); }
+
+.media-card .card-info {
+    padding: 12px;
+}
+
+.media-card .card-info .timestamp {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.media-card .card-info .filename {
+    font-size: 12px;
+    color: var(--text-primary);
+    margin: 4px 0;
+    word-break: break-all;
+}
+
+.media-card .btn-download {
+    display: inline-block;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.media-card .btn-download:hover {
+    background: rgba(0,212,255,0.25);
+}
+
+.media-card audio {
+    width: 100%;
+    margin-top: 8px;
+}
+
+/* Media filter buttons */
+.media-filter.active {
+    background: var(--accent-dim) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0,212,255,0.2) !important;
+}
+
+/* Chart containers */
+#chart-daily, #chart-types {
+    max-height: 300px;
+}
+
+/* Server info */
+.server-info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+}
+
+.server-info-row:last-child { border-bottom: none; }
+
+.server-info-row .label {
+    color: var(--text-secondary);
+}
+
+.server-info-row .value {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* Status badge */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.status-badge.online {
+    background: rgba(63,185,80,0.1);
+    color: var(--success);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* Animations */
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(0,212,255,0.1); }
+    50% { box-shadow: 0 0 40px rgba(0,212,255,0.2); }
+}
+
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* Toast notifications override */
+.growl-notification {
+    border-radius: 12px !important;
+    backdrop-filter: blur(10px) !important;
+}
+
+/* Print/export */
+@media print {
+    .sidebar, .topbar, .btn-toggle, .btn-theme, .notif-bell { display: none !important; }
+    .main-content { margin-left: 0 !important; margin-top: 0 !important; }
+    .log-terminal { color: #000 !important; background: #fff !important; }
+}

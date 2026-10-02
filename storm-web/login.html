@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In &middot; StormBrain</title>
+    <link rel="icon" type="image/png" href="/assets/img/logo-64.png?v=axe1">
+    <link href="/assets/css/login.css?v=axe1" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="scanline"></div>
+    <canvas id="particles-canvas"></canvas>
+
+    <main class="page">
+        <div class="shell">
+            <section class="login-side">
+                <div class="login-container">
+                    <div class="login-card">
+                        <header class="brand-lockup">
+                            <img class="brand-logo" src="/assets/img/logo.png?v=axe1"
+                                 alt="StormBrain logo" width="112" height="112">
+                            <div class="brand-name">Storm<span>Brain</span></div>
+                        </header>
+
+            <form action="/login" method="POST" id="loginForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="field">
+                    <label for="username">USERNAME</label>
+                    <div class="input-group-custom">
+                        <input id="username" type="text" name="username" placeholder="operator" required autofocus autocomplete="username">
+                        <span class="input-icon" aria-hidden="true">&#9673;</span>
+                        <span class="typing-hint">Enter username</span>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="password">PASSWORD</label>
+                    <div class="input-group-custom">
+                        <input id="password" type="password" name="password" placeholder="••••••••" required autocomplete="current-password">
+                        <span class="input-icon" aria-hidden="true">&#9673;</span>
+                        <span class="typing-hint">Enter password</span>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <label class="remember"><input type="checkbox" id="rememberMe" checked> Remember me</label>
+                    <button type="button" class="link" id="policyLink" aria-haspopup="dialog">Security Policy</button>
+                </div>
+
+                <button type="submit" class="btn-login" id="submitBtn">
+                    <span class="btn-text">Sign In &#8594;</span>
+                    <span class="spinner" aria-hidden="true"></span>
+                </button>
+
+                <p class="policy-hint" id="policyHint">
+                    You must read and accept the
+                    <button type="button" class="link-inline" id="policyHintLink">Security Policy</button>
+                    before signing in.
+                </p>
+
+                <p class="policy-accepted" id="policyAccepted" hidden>
+                    <span class="tick" aria-hidden="true">&#10003;</span>
+                    <span>Security Policy accepted<span class="policy-stamp" id="policyStamp"></span></span>
+                </p>
+
+                {% if error %}
+                <div class="error-msg">{{ error }}</div>
+                {% endif %}
+            </form>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <div class="footer">StormBrain v3.0 &middot; Cybersecurity education &amp; authorized testing only</div>
+
+    <!-- ===================== Security Policy (legal terms & liability) ===================== -->
+    <div class="policy-overlay" id="policyModal" role="dialog" aria-modal="true"
+         aria-labelledby="policyTitle" hidden>
+        <div class="policy-dialog">
+            <header class="policy-head">
+                <div>
+                    <h2 id="policyTitle">Security Policy</h2>
+                    <p class="policy-sub">Legal terms, authorized-use terms and liability notice</p>
+                </div>
+                <button type="button" class="policy-close" id="policyClose" aria-label="Close policy">&times;</button>
+            </header>
+
+            <div class="policy-body" id="policyBody" tabindex="0">
+                <p class="policy-lead">
+                    StormBrain is an offensive-security simulation toolkit maintained for education,
+                    research and contractually authorized security testing. Access to this console is a
+                    privilege granted to vetted operators and is governed by the terms below. By signing
+                    in you confirm that you have read, understood and accepted every clause of this policy.
+                </p>
+
+                <h3>1. Authorized use only</h3>
+                <p>
+                    You may use this software exclusively against systems, networks, accounts and devices
+                    for which you hold prior, documented and signed authorization from the lawful owner.
+                    Authorization must state the target scope, the techniques allowed, the test window and
+                    the person who requested the test. Any use outside that scope is prohibited.
+                </p>
+
+                <h3>2. Legal compliance</h3>
+                <p>
+                    You are solely responsible for complying with every law and regulation that applies to
+                    you, including computer-misuse and unauthorized-access statutes, privacy and
+                    data-protection law, telecommunications regulation, and the rules of your employer or
+                    educational institution. Unauthorized access to, interception of, or interference with
+                    computer material and communications is a criminal offence in most jurisdictions.
+                    This tool grants no authority, licence or immunity of any kind.
+                </p>
+
+                <h3>3. Consent and data minimisation</h3>
+                <p>
+                    Before running a simulation against people, obtain informed, freely given and
+                    revocable consent that describes the purpose, the data collected (device telemetry,
+                    media, geolocation), the retention period and the withdrawal procedure. Collect the
+                    minimum data required for the objective, keep the consent record for the whole
+                    engagement, and never target minors or persons lacking legal capacity.
+                </p>
+
+                <h3>4. Operator accountability</h3>
+                <p>
+                    Credentials issued for this console are personal and must never be shared, reused or
+                    embedded in scripts. Every action performed on this console is attributed to the
+                    account that performed it. You must not attempt to bypass authentication, escalate
+                    privileges, disable logging or conceal activity.
+                </p>
+
+                <h3>5. Monitoring, logging and disclosure</h3>
+                <p>
+                    This console records authentication events, source IP addresses, timestamps, operator
+                    actions and page access server-side. These records are used for security, audit and
+                    compliance purposes and may be disclosed to the system owner or to a competent
+                    authority where legally required. Do not expect private use of this console.
+                </p>
+
+                <h3>6. Handling and retention of collected data</h3>
+                <p>
+                    Captured media, device fingerprints and location data are stored under the operator's
+                    own responsibility. Encrypt data at rest, avoid exporting it to personal devices or
+                    third-party services, delete it immediately after the authorized engagement and the
+                    agreed reporting period, and destroy derived copies and backups.
+                </p>
+
+                <h3>7. Prohibited activities</h3>
+                <p>
+                    The following are strictly prohibited: unauthorized testing of third-party
+                    infrastructure or services; harassment, stalking, doxxing, extortion, blackmail or
+                    coercion; theft of real credentials, funds or identities; targeting minors, public
+                    authorities or critical infrastructure; mass or unsolicited distribution of lures;
+                    and any use intended to cause harm, gain or reputational damage.
+                </p>
+
+                <h3>8. Limitation of liability and warranty</h3>
+                <p>
+                    The software is provided "as is" and "as available", without warranty of any kind,
+                    express or implied, including merchantability, fitness for a particular purpose and
+                    non-infringement. To the maximum extent permitted by law, the authors, contributors
+                    and distributors accept no liability for any direct, indirect, incidental, special,
+                    punitive or consequential damage, including data loss, business interruption,
+                    regulatory fines, criminal or civil proceedings, or claims arising from the use or
+                    misuse of this software. The operator assumes full and sole responsibility for every
+                    consequence of its use, including any unlawful or negligent act.
+                </p>
+
+                <h3>9. Incident reporting</h3>
+                <p>
+                    Report immediately, without concealment: accidental collection of real personal data,
+                    unintended exposure of captures, suspected compromise of the console, or any use that
+                    may have exceeded the authorized scope.
+                </p>
+
+                <h3>10. Acceptance and revision</h3>
+                <p>
+                    Continued use of this console constitutes acceptance of this policy as revised. The
+                    revision identifier shown below is stamped on the session acknowledgement. If any
+                    clause is found unenforceable, the remaining clauses stay in force. Nothing here
+                    creates a relationship of agency, employment or partnership, and nothing limits
+                    liability that cannot be limited by law.
+                </p>
+            </div>
+
+            <footer class="policy-foot">
+                <span class="policy-version" id="policyVersion"></span>
+                <div class="policy-actions">
+                    <button type="button" class="btn-ghost" id="policyDecline">Decline</button>
+                    <button type="button" class="btn-accept" id="policyAccept">I have read and accept</button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        // Particle effect
+        const canvas = document.getElementById('particles-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.2;
+                this.color = Math.random() > 0.5 ? '#00d4ff' : '#7c3aed';
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.opacity;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            const particleCount = Math.min(100, Math.floor((canvas.width * canvas.height) / 15000));
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        initParticles();
+        animateParticles();
+
+        // ===================== Security Policy gate =====================
+        const loginForm = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = submitBtn.querySelector('.btn-text');
+        const spinner = submitBtn.querySelector('.spinner');
+
+        const POLICY_KEY = 'storm-policy-accepted';
+        const POLICY_REVISION = 'Rev. 2026-09';
+
+        const policyModal = document.getElementById('policyModal');
+        const policyLink = document.getElementById('policyLink');
+        const policyHintLink = document.getElementById('policyHintLink');
+        const policyClose = document.getElementById('policyClose');
+        const policyDecline = document.getElementById('policyDecline');
+        const policyAccept = document.getElementById('policyAccept');
+        const policyBody = document.getElementById('policyBody');
+        const policyHint = document.getElementById('policyHint');
+        const policyAccepted = document.getElementById('policyAccepted');
+        const policyStamp = document.getElementById('policyStamp');
+        const policyVersion = document.getElementById('policyVersion');
+
+        policyVersion.textContent = POLICY_REVISION + ' \u00b7 StormBrain v3.0';
+
+        function readAcceptedRevision() {
+            try { return localStorage.getItem(POLICY_KEY) || ''; } catch (e) { return ''; }
+        }
+
+        function refreshPolicyState() {
+            var accepted = readAcceptedRevision() === POLICY_REVISION;
+            submitBtn.disabled = !accepted;
+            policyHint.hidden = accepted;
+            policyAccepted.hidden = !accepted;
+            policyStamp.textContent = accepted ? ' \u00b7 ' + POLICY_REVISION : '';
+        }
+
+        function openPolicy() {
+            policyModal.hidden = false;
+            document.body.classList.add('policy-open');
+            setTimeout(function () { policyBody.scrollTop = 0; policyBody.focus(); }, 40);
+        }
+
+        function closePolicy() {
+            policyModal.hidden = true;
+            document.body.classList.remove('policy-open');
+        }
+
+        [policyLink, policyHintLink].forEach(function (el) {
+            if (el) el.addEventListener('click', openPolicy);
+        });
+        policyClose.addEventListener('click', closePolicy);
+        policyDecline.addEventListener('click', closePolicy);
+        policyAccept.addEventListener('click', function () {
+            try { localStorage.setItem(POLICY_KEY, POLICY_REVISION); } catch (e) {}
+            closePolicy();
+            refreshPolicyState();
+        });
+        policyModal.addEventListener('click', function (e) {
+            if (e.target === policyModal) closePolicy();
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !policyModal.hidden) closePolicy();
+        });
+
+        refreshPolicyState();
+
+        // Form handling
+        loginForm.addEventListener('submit', function (e) {
+            if (submitBtn.disabled) {
+                e.preventDefault();
+                openPolicy();
+                return;
+            }
+            submitBtn.disabled = true;
+            btnText.style.display = 'none';
+            spinner.style.display = 'block';
+        });
+
+        // Input animations
+        document.querySelectorAll('.input-group-custom input').forEach(input => {
+            input.addEventListener('focus', function() {
+                this.parentElement.querySelector('.typing-hint').textContent = 
+                    this.type === 'password' ? 'Enter password' : 'Enter username';
+            });
+        });
+    </script>
+</body>
+</html>

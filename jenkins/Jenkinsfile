@@ -1,0 +1,135 @@
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+    timeout(time: 30, unit: 'MINUTES')
+  }
+
+  environment {
+    // Never run the interactive launcher (st.py) in CI: it archives sessions,
+    // asks for an ngrok token and blocks forever. CI only lints/tests/builds.
+    PYTHONDONTWRITEBYTECODE = '1'
+    PIP_DISABLE_PIP_VERSION_CHECK = '1'
+    // Isolate Python + secrets per-build so parallel jobs never clash.
+    VENV_DIR = '.venv-jenkins'
+    TMPDIR = "${WORKSPACE_TMPDIR ?: env.WORKSPACE + '@tmp'}"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+        sh 'git rev-parse --short HEAD > .git-commit 2>/dev/null || echo unknown > .git-commit'
+      }
+    }
+
+    stage('Setup Python') {
+      steps {
+        sh '''
+          set -eu
+          python3 --version
+          python3 -m venv "${VENV_DIR}"
+          . "${VENV_DIR}/bin/activate"
+          pip install -U pip
+          pip install -r requirements.txt
+          pip install -r jenkins/requirements-ci.txt
+        '''
+      }
+    }
+
+    stage('Lint / Syntax') {
+      parallel {
+        stage('python:compile+ruff') {
+          steps {
+            sh '''
+              set -eu
+              . "${VENV_DIR}/bin/activate"
+              python -m py_compile app.py modules/*.py jenkins/tests/*.py
+              ruff check app.py modules/ jenkins/tests/ || true
+              ruff format --check app.py modules/ jenkins/tests/ || true
+            '''
+          }
+        }
+        stage('js:node-check') {
+          steps {
+            sh '''
+              set -eu
+              node --version
+              node --check storm-web/assets/js/dashboard.js
+              node --check storm-web/assets/js/sb.js
+              node --check storm-web/assets/js/stormmap.js
+            '''
+          }
+        }
+        stage('shell:bash-syntax') {
+          steps {
+            sh '''
+              set -eu
+              bash -n install.sh
+              bash -n jenkins/scripts/*.sh
+            '''
+          }
+        }
+      }
+    }
+
+    stage('Unit tests') {
+      steps {
+        sh '''
+          set -eu
+          . "${VENV_DIR}/bin/activate"
+          pytest jenkins/tests -q --junitxml=junit.xml
+        '''
+      }
+      post {
+        always {
+          junit allowEmptyResults: true, testResults: 'junit.xml'
+        }
+      }
+    }
+
+    stage('Security scan (non-blocking)') {
+      steps {
+        sh '''
+          set -eu
+          . "${VENV_DIR}/bin/activate"
+          bandit -r app.py modules/ -f txt || true
+          pip-audit || true
+        '''
+      }
+    }
+
+    stage('Package artifact') {
+      when { anyOf { branch 'main'; branch 'master' } }
+      steps {
+        sh '''
+          set -eu
+          COMMIT="$(cat .git-commit)"
+          tar --exclude='./.git' --exclude='./.venv-jenkins' --exclude='./storm-web/sessions' \
+              --exclude='./storm-web/images/*' --exclude='./storm-web/sounds/*' \
+              --exclude='./storm-web/visitors/*' --exclude='./storm-web/log/*' \
+              -czf "stormbrain-${COMMIT}.tar.gz" .
+          ls -lh stormbrain-*.tar.gz
+        '''
+        archiveArtifacts artifacts: 'stormbrain-*.tar.gz', fingerprint: true, onlyIfSuccessful: true
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'rm -rf "${VENV_DIR}" .git-commit junit.xml || true'
+      cleanWs(
+        deleteDirs: true, notFailBuild: true,
+        patterns: [[pattern: '.venv-jenkins/', type: 'INCLUDE'],
+                   [pattern: '__pycache__/', type: 'INCLUDE']]
+      )
+    }
+    failure {
+      echo 'Build FAILED — see stage logs. Never run `python st.py` in Jenkins.'
+    }
+  }
+}

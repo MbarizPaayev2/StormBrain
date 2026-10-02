@@ -1,0 +1,32 @@
+**/.DS_Store
+**/*.swp
+*.bak
+ngrok.zip
+ngrok.tgz
+ngrok
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# --- Unrelated local projects kept in this folder ---
+aise/
+
+# --- Secrets / credentials: never commit these ---
+.secrets/
+storm-web/check-c.json
+storm-web/Settings.json
+
+# --- Harvested data and runtime artifacts: never commit these ---
+storm-web/sessions/
+storm-web/images/*
+!storm-web/images/image.log
+storm-web/sounds/*
+!storm-web/sounds/sounds.log
+storm-web/visitors/
+storm-web/log/*
+!storm-web/log/empty
+storm-web/templates/*/result.txt
+storm-web/templates/*/result.tmp.txt
