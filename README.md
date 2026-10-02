@@ -139,8 +139,13 @@ Delete `storm-web/sessions/*` to purge old runs.
 | `STORM_TRUST_PROXY` | `0` | Trust `X-Forwarded-For` (ngrok / reverse proxy) |
 | `STORM_MAX_UPLOAD_MB` | `16` | Upload / base64 payload limit |
 | `STORM_LOGIN_RATE` / `STORM_COLLECT_RATE` / `STORM_API_RATE` | `10` / `120` / `240` | Requests per minute per IP |
+| `STORM_LOGIN_USER_RATE` | `20` | Login attempts per 5 min **per account** (stops IP-rotation brute force) |
 | `STORM_GEO_CACHE_TTL` | `3600` | Geo-IP cache lifetime (seconds) |
 | `NGROK_AUTHTOKEN` | `.secrets/ngrok.json` | ngrok auth token (env takes priority) |
+
+None of these are exposed to the browser: Flask serves `/assets/` statically and
+renders the panel through Jinja, so no environment value reaches the client bundle.
+`/api/server_info` returns only a boolean (`ngrok_token_set`), never the token.
 
 <br>
 
@@ -150,10 +155,21 @@ Delete `storm-web/sessions/*` to purge old runs.
   reachable with an authenticated session and is gitignored.
 - Archived sessions (`storm-web/sessions/`) are gitignored as well and are served
   exclusively through the authenticated `/sessions/<id>/<kind>/<file>` route.
-- Secrets and runtime state live in `.secrets/`, `storm-web/check-c.json` and
-  `storm-web/Settings.json` - all gitignored.
-- Every state-changing admin request requires a CSRF token; login is rate limited.
-- Template names are validated and uploads are size/format checked.
+- Secrets and runtime state live in `.secrets/` (session token, ngrok token, admin
+  hash, Flask secret key) - **outside the served web root** - plus
+  `storm-web/Settings.json`. All are gitignored.
+- Every state-changing admin request requires a CSRF token.
+- Rate limiting is per IP **and** per account on login; 429 responses carry a
+  `Retry-After` header and a human-readable wait message.
+- Responses carry `X-Content-Type-Options`, `X-Frame-Options: DENY`,
+  `Referrer-Policy`, `Cross-Origin-Opener-Policy` and a cleared
+  `X-Powered-By`. `Strict-Transport-Security` is only sent over TLS.
+- Logging out revokes the server-side session token, so a copied `logindata`
+  cookie stops working immediately.
+- Template names are validated; uploads are size-limited and content-sniffed
+  (PNG magic bytes for camera frames, `RIFF`/`WAVE` for microphone audio).
+- Template errors never return `str(exception)` to the client - the traceback
+  stays in the server log.
 
 <br>
 

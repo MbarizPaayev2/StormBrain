@@ -53,16 +53,20 @@ IMAGES_DIR = STORM_WEB / "images"
 SOUNDS_DIR = STORM_WEB / "sounds"
 LOG_DIR = STORM_WEB / "log"
 VISITORS_DIR = STORM_WEB / "visitors"
+SESSIONS_DIR = STORM_WEB / "sessions"
+# Secrets live outside the web root and are never served over HTTP.
+SECRETS_DIR = BASE_DIR / ".secrets"
+CREDENTIALS_FILE = SECRETS_DIR / "credentials.json"
+SECRET_KEY_FILE = SECRETS_DIR / "secret.key"
 SETTINGS_FILE = STORM_WEB / "Settings.json"
-CHECK_C_FILE = STORM_WEB / "check-c.json"
+# Session token also lives OUTSIDE the web root. It used to sit in
+# storm-web/check-c.json, i.e. inside the served directory tree - if the static
+# folder ever widens, that token would become publicly downloadable.
+CHECK_C_FILE = SECRETS_DIR / "check-c.json"
 ACTIVITY_FILE = LOG_DIR / "activity.json"
 EVENTS_FILE = LOG_DIR / "events.jsonl"
 MAX_EVENT_MESSAGE = 4000
 MAX_EVENTS_TAIL = 500
-SESSIONS_DIR = STORM_WEB / "sessions"
-SECRETS_DIR = BASE_DIR / ".secrets"
-CREDENTIALS_FILE = SECRETS_DIR / "credentials.json"
-SECRET_KEY_FILE = SECRETS_DIR / "secret.key"
 
 
 def _env_flag(name, default=False):
@@ -151,9 +155,36 @@ def read_check_c():
 
 
 def write_check_c(data):
-    """Write check-c.json token data."""
+    """Write check-c.json token data (0600 - it is an auth credential)."""
     with open(CHECK_C_FILE, "w") as f:
         json.dump(data, f)
+    try:
+        os.chmod(CHECK_C_FILE, 0o600)
+    except OSError:
+        pass
+
+
+def _migrate_legacy_check_c():
+    """One-time move of the old storm-web/check-c.json into .secrets/.
+
+    Older builds kept the session token inside the served web root. Move it
+    (never copy) so the token is no longer reachable from that directory, then
+    leave a harmless empty stub so old tooling does not crash.
+    """
+    legacy = STORM_WEB / "check-c.json"
+    if not legacy.exists() or CHECK_C_FILE.exists():
+        return
+    try:
+        data = json.loads(legacy.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(data, dict) or not data.get("token"):
+        return
+    write_check_c(data)
+    try:
+        legacy.unlink()
+    except OSError:
+        pass
 
 
 def change_token(token):
@@ -162,6 +193,10 @@ def change_token(token):
     data["token"] = token
     data["expired"] = "no"
     write_check_c(data)
+
+
+# Move a legacy in-web-root session token into .secrets/ on startup.
+_migrate_legacy_check_c()
 
 
 # ──────────────────────────────────────────────
@@ -280,6 +315,32 @@ def _enforce_csrf():
     return None
 
 
+@app.after_request
+def _security_headers(response):
+    """Baseline hardening headers for every response.
+
+    CSP is deliberately NOT set here: panel.html loads Bootstrap/chart.js from
+    a CDN and uses inline <script>/onclick=, so a strict policy would break the
+    console. Tracked as a follow-up in the security audit.
+    """
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("X-XSS-Protection", "1; mode=block")
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    # Do not advertise the server stack.
+    response.headers["X-Powered-By"] = ""
+    # Only advertise HSTS when the panel is actually served over TLS.
+    if COOKIE_SECURE or request.is_secure:
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    # API/collector responses are JSON and must never be cached by proxies.
+    if request.path.startswith(("/api/", "/receiver", "/templates/")):
+        response.headers.setdefault("Cache-Control", "no-store, private")
+    return response
+
+
 # ──────────────────────────────────────────────
 # Rate limiting (dependency free, per client IP)
 # ──────────────────────────────────────────────
@@ -311,13 +372,38 @@ class RateLimiter:
 LOGIN_LIMITER = RateLimiter(int(os.environ.get("STORM_LOGIN_RATE", "10")), 60)
 COLLECT_LIMITER = RateLimiter(int(os.environ.get("STORM_COLLECT_RATE", "120")), 60)
 API_LIMITER = RateLimiter(int(os.environ.get("STORM_API_RATE", "240")), 60)
+# Per-username throttle: an attacker rotating IPs cannot brute-force one
+# account indefinitely. Deliberately looser than the per-IP login limit.
+AUTH_USER_LIMITER = RateLimiter(int(os.environ.get("STORM_LOGIN_USER_RATE", "20")), 300)
+
+
+def _auth_user_throttled(username):
+    """True when this account has exceeded the username-based attempt limit.
+
+    Counts every attempt (success or failure) for the account, so an attacker
+    rotating source IPs cannot brute-force a single account indefinitely.
+    """
+    name = str(username or "").strip().lower()
+    if not name:
+        return False
+    return not AUTH_USER_LIMITER.allow(f"auth-user:{name}")
 
 
 def rate_limit(limiter, bucket):
     """Return a 429 response when the caller exceeded the limiter, else None."""
-    if limiter.allow(f"{bucket}:{get_client_ip()}"):
+    key = f"{bucket}:{get_client_ip()}"
+    if limiter.allow(key):
         return None
-    return jsonify({"error": "rate limit exceeded"}), 429
+    retry_after = limiter.window_seconds
+    response = jsonify({
+        "error": "rate limit exceeded",
+        "retry_after": retry_after,
+        "message": f"Too many requests. Try again in {retry_after} seconds.",
+    })
+    response.status_code = 429
+    # Tell the client exactly how long to wait (prompt: actionable error).
+    response.headers["Retry-After"] = str(retry_after)
+    return response
 
 
 # ──────────────────────────────────────────────
@@ -515,17 +601,23 @@ def add_activity(entry):
 
 
 def is_logged_in():
-    """Check if the user is authenticated."""
-    # Check session
+    """Check if the user is authenticated.
+
+    The session cookie is the primary proof. The 'logindata' cookie is a
+    legacy PHP fallback; it is compared in constant time so the token cannot
+    be recovered byte-by-byte through response timing.
+    """
     if session.get("IAm-logined"):
         return True
-    # Check cookie
+    # Legacy cookie fallback (replaces the PHP check-c.json mechanism).
     key = read_check_c()
+    expected = str(key.get("token") or "")
     login_cookie = request.cookies.get("logindata", "")
-    if login_cookie and login_cookie == key.get("token") and key.get("expired") == "no":
-        # Store the real username (never "yes") so password changes keep working.
-        session["IAm-logined"] = load_credentials().get("username", "admin")
-        return True
+    if expected and login_cookie and key.get("expired") == "no":
+        if hmac.compare_digest(login_cookie.encode(), expected.encode()):
+            # Store the real username (never "yes") so password changes keep working.
+            session["IAm-logined"] = load_credentials().get("username", "admin")
+            return True
     return False
 
 
@@ -837,6 +929,19 @@ def login():
         username = request.form.get("username", "")
         password = request.form.get("password", "")
 
+        # Account-based throttle: stops IP rotation from brute-forcing one
+        # account. Checked after the IP limit so both layers apply.
+        if _auth_user_throttled(username):
+            retry = AUTH_USER_LIMITER.window_seconds
+            response = jsonify({
+                "error": "account temporarily locked",
+                "retry_after": retry,
+                "message": f"Too many attempts for this account. Try again in {retry} seconds.",
+            })
+            response.status_code = 429
+            response.headers["Retry-After"] = str(retry)
+            return response
+
         if verify_credentials(username, password):
             session.clear()
             session["IAm-logined"] = username
@@ -863,10 +968,16 @@ def panel():
 
     csrf_token = ensure_csrf_token()
 
-    # Ensure cookie token is set
+    # Ensure cookie token is set. Rotate only when the cookie is genuinely
+    # missing/mismatched - the previous unconditional rotation logged every
+    # other device out of the panel on each page load.
     key = read_check_c()
     login_cookie = request.cookies.get("logindata", "")
-    if not login_cookie or login_cookie != key.get("token"):
+    expected = str(key.get("token") or "")
+    needs_token = not login_cookie or not expected or not hmac.compare_digest(
+        login_cookie.encode(), expected.encode()
+    )
+    if needs_token:
         client_token = generate_token()
         change_token(client_token)
         response = make_response(render_template("panel.html", csrf_token=csrf_token))
@@ -882,7 +993,14 @@ def panel():
 # --- logout ---
 @app.route("/logout")
 def logout():
+    """Log out: drop the session AND invalidate the server-side token.
+
+    Without the change_token() call the old 'logindata' cookie would still
+    match check-c.json, so is_logged_in() would keep accepting it and the
+    logout would be a no-op for anyone holding the cookie.
+    """
     session.clear()
+    change_token("")  # revoke: no cookie value can authenticate any more
     resp = make_response(redirect(url_for("login")))
     resp.delete_cookie("logindata")
     return resp
@@ -1209,12 +1327,25 @@ def microphone_upload():
     if audio_file is None:
         return "", 204
 
+    payload = audio_file.read()
+    if not payload:
+        return "", 204
+    # Server-side size cap. Flask's MAX_CONTENT_LENGTH only bounds the whole
+    # request body, so a single oversized file still has to be rejected here.
+    if len(payload) > MAX_UPLOAD_BYTES:
+        return jsonify({"error": "payload too large"}), 413
+    # Content sniffing instead of trusting the extension: a real RIFF/WAVE file
+    # starts with "RIFF" + 4 size bytes + "WAVE".
+    if not (payload[:4] == b"RIFF" and payload[8:12] == b"WAVE"):
+        return jsonify({"error": "payload is not a WAVE audio file"}), 400
+
     safe_name = secure_filename(audio_file.filename or "") or "audio"
     if not safe_name.lower().endswith(".wav"):
         safe_name = f"{safe_name}.wav"
+    # Random suffix + secure_filename => user input never reaches the path.
     filename = secure_filename(f"{Path(safe_name).stem[:48]}_{secrets.token_hex(3)}.wav")
     filepath = SOUNDS_DIR / filename
-    audio_file.save(str(filepath))
+    filepath.write_bytes(payload)
 
     inbox = f"Audio File Was Saved ! > /sounds/{filename}"
     write_result_file(
@@ -1561,8 +1692,9 @@ def api_template_crud(template_name):
                 "html": html_content,
                 "metadata": metadata
             })
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+        except Exception:
+            app.logger.exception("Template read failed for %s", template_name)
+            return jsonify({"error": "Failed to read template"}), 500
     
     elif request.method == "POST":
         # Update template
@@ -1587,8 +1719,11 @@ def api_template_crud(template_name):
                     json.dump(data["metadata"], f, indent=2)
             
             return jsonify({"status": "success"})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+        except Exception:
+            # Never return str(e): raw exception text can leak filesystem
+            # paths and internals to the client. Traceback stays server-side.
+            app.logger.exception("Template update failed for %s", template_name)
+            return jsonify({"error": "Failed to update template"}), 500
     
     elif request.method == "DELETE":
         # Delete template
@@ -1599,8 +1734,9 @@ def api_template_crud(template_name):
             import shutil
             shutil.rmtree(template_dir)
             return jsonify({"status": "success"})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+        except Exception:
+            app.logger.exception("Template delete failed for %s", template_name)
+            return jsonify({"error": "Failed to delete template"}), 500
 
 
 @app.route("/api/templates/create", methods=["POST"])
@@ -1644,8 +1780,9 @@ def api_template_create():
             json.dump(metadata, f, indent=2)
         
         return jsonify({"status": "success", "name": template_name})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        app.logger.exception("Template create failed for %s", template_name)
+        return jsonify({"error": "Failed to create template"}), 500
 
 
 @app.route("/api/templates/<template_name>/duplicate", methods=["POST"])
@@ -1680,8 +1817,9 @@ def api_template_duplicate(template_name):
                 json.dump(metadata, f, indent=2)
         
         return jsonify({"status": "success", "new_name": new_name})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        app.logger.exception("Template duplicate failed for %s", template_name)
+        return jsonify({"error": "Failed to duplicate template"}), 500
 
 
 # ==================== WEBSOCKET EVENTS ====================

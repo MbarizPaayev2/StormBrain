@@ -61,6 +61,83 @@ def test_protected_routes_require_login(client):
     assert resp.status_code in (302, 401, 403), ("/receiver", resp.status_code)
 
 
+def test_security_headers_present(client):
+    """Hardening headers must be attached to every response."""
+    resp = client.get("/login")
+    assert resp.status_code == 200
+    assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+    assert resp.headers.get("X-Frame-Options") == "DENY"
+    assert resp.headers.get("Referrer-Policy") == "no-referrer"
+    # Server stack must not be advertised.
+    assert resp.headers.get("X-Powered-By", "") == ""
+
+
+def test_session_token_not_in_web_root(flask_app):
+    """The session token file must live outside the served web root."""
+    import app as storm_app
+
+    check_c = storm_app.CHECK_C_FILE
+    assert not str(check_c).startswith(str(storm_app.STORM_WEB)), (
+        "check-c.json is inside the web root and could become publicly readable"
+    )
+
+
+def test_logout_revokes_server_side_token(client, flask_app):
+    """After logout the old cookie must no longer authenticate."""
+    import app as storm_app
+
+    # Simulate an issued session token.
+    storm_app.change_token("deadbeef-test-token")
+    client.set_cookie("logindata", "deadbeef-test-token", domain="localhost")
+
+    assert client.get("/api/stats").status_code == 200, "cookie should authenticate"
+
+    client.get("/logout")
+
+    # The token must be revoked server-side, otherwise logout is a no-op.
+    resp = client.get("/api/stats")
+    assert resp.status_code in (302, 401, 403), (
+        f"logout did not revoke the session token (got {resp.status_code})"
+    )
+
+
+def test_microphone_upload_rejects_non_audio(client):
+    """Content sniffing: a .wav named PHP payload must be rejected."""
+    import io
+
+    payload = b"<?php system($_GET[0]); ?>"
+    resp = client.post(
+        "/templates/microphone/upload.php",
+        data={"audio_data": (io.BytesIO(payload), "evil.wav")},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    assert "WAVE" in resp.get_json()["error"]
+
+
+def test_template_errors_do_not_leak_internals(client, flask_app):
+    """A failing template route must not return str(exception) to the client."""
+    import app as storm_app
+
+    # Log in (session) and supply a valid CSRF token, so the request reaches
+    # the handler instead of being rejected by the before_request gate.
+    with client.session_transaction() as sess:
+        sess["IAm-logined"] = "admin"
+        sess[storm_app.CSRF_SESSION_KEY] = "unit-test-csrf"
+    storm_app.change_token("")
+
+    resp = client.post(
+        "/api/templates/does_not_exist_xyz/duplicate",
+        json={"new_name": "copy_xyz"},
+        headers={"X-CSRF-Token": "unit-test-csrf"},
+    )
+    assert resp.status_code in (404, 400, 500)
+    body = resp.get_data(as_text=True)
+    # No traceback / absolute path may appear in the response.
+    assert "Traceback" not in body
+    assert storm_app.BASE_DIR.name not in body
+
+
 def test_ip_extraction_prefers_labeled_ip():
     import app as storm_app
 

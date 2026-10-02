@@ -15,9 +15,13 @@ venv/
 aise/
 
 # --- Secrets / credentials: never commit these ---
+# Session token (check-c.json), ngrok authtoken, admin hash and the Flask
+# secret key all live under .secrets/ - outside the served web root.
 .secrets/
+# Legacy locations, still ignored in case an old checkout leaves a copy behind.
 storm-web/check-c.json
 storm-web/Settings.json
+requirements.lock
 
 # --- Harvested data and runtime artifacts: never commit these ---
 storm-web/sessions/

@@ -1,6 +1,7 @@
 # CI-only tools. Runtime deps stay in ../requirements.txt
 # (flask, flask-socketio, colorama, requests, psutil, pyngrok).
-pytest>=8
+# Pinned to lower bounds + upper caps so CI does not silently drift.
+pytest>=8,<10
 ruff>=0.4
 bandit>=1.7
 pip-audit>=2.7
